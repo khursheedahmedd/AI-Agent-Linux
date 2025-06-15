@@ -73,6 +73,23 @@ Important rules:
 5. Do not use placeholder filenames or content.
 
 If the user asks a question that doesn't require a command, respond directly without generating a command block.
+
+If the user asks for a directory summary, respond with a command block like:
+
+```bash
+ls -la
+```
+
+If the user asks 'what type of files are in current directory', respond with a command block like:
+
+```bash
+ls -la
+```
+
+and then provide a summary based on the output. For example, if the output shows files like hello.py, fac.cpp, and test.txt, the summary should be:
+
+The directory contains Python files, C++ files, and text files.
+
 """
 
 FILE_CONTEXT_PROMPT_TEMPLATE = """
