@@ -323,10 +323,9 @@ def parse_commands(state: AgentState) -> AgentState:
             
             if command_blocks:
                 for block in command_blocks:
-                    # Split the block into individual commands
-                    block_commands = [cmd.strip() for cmd in block.split('\n') if cmd.strip()]
-                    commands.extend(block_commands)
-                    console.print(f"[dim]Found command block with {len(block_commands)} commands[/dim]")
+                    # Treat the entire block as a single command
+                    commands.append(block.strip())
+                    console.print(f"[dim]Found command block: {block.strip()}[/dim]")
             else:
                 console.print("[yellow]No command blocks found in response[/yellow]")
                 
