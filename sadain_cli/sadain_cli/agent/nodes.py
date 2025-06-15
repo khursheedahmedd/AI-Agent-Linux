@@ -11,6 +11,7 @@ from ..utils import print_code, is_command_safe, get_current_context, print_colo
 from .tools import execute_shell_command
 from ..command_translator import CommandTranslator
 from ..os_detection import OSDetector
+from .prompt_loader import get_system_prompt
 
 console = Console()
 
@@ -541,9 +542,12 @@ EOF"""
                 state["extracted_commands"] = [default_command]
                 return state
         
+        # Get the OS-specific system prompt
+        system_prompt = get_system_prompt()
+        
         # Prepare the messages
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT_AGENT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_request}
         ]
         console.print("[dim]Prepared messages for LLM:[/dim]")
@@ -571,7 +575,7 @@ EOF"""
         try:
             # Look for command blocks
             import re
-            command_blocks = re.findall(r'```(?:bash)?\s*(.*?)\s*```', response_content, re.DOTALL)
+            command_blocks = re.findall(r'```(?:bash|powershell)?\s*(.*?)\s*```', response_content, re.DOTALL)
             
             if command_blocks:
                 for block in command_blocks:
