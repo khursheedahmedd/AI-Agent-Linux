@@ -18,7 +18,7 @@ This is an early version focusing on core functionality with Novita and LangGrap
 1.  **Clone the repository:**
 
     ```bash
-    https://github.com/khursheedahmedd/AI-Agent-Linux.git
+    https://github.com/khursheedahmedd/sadain-cli.git
     cd sadain-cli
     ```
 
