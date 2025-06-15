@@ -1,6 +1,6 @@
 langchain
 langgraph
-langchain-groq
+openai
 python-dotenv
 typer[all] 
 rich

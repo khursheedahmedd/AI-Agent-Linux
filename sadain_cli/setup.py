@@ -8,7 +8,7 @@ setup(
     install_requires=[
         "langchain",
         "langgraph",
-        "langchain-groq",
+        "openai",
         "python-dotenv",
         "typer[all]",
         "rich"
@@ -23,7 +23,7 @@ setup(
     description="A terminal-based AI assistant.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/sadain-cli", # Replace with your repo
+    url="https://github.com/khursheedahmedd/sadain-cli", # Replace with your repo
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License", # Choose your license

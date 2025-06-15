@@ -1,30 +1,33 @@
 from typing import List, Dict
 import os
 from rich.console import Console
-import groq
+from openai import OpenAI
 
 console = Console()
 
 class LLM:
     """LLM class for handling language model interactions."""
     
-    def __init__(self, model: str = "llama-3.3-70b-versatile", temperature: float = 0.7, max_tokens: int = 1000):
+    def __init__(self, model: str = "meta-llama/llama-3.1-8b-instruct", temperature: float = 0.7, max_tokens: int = 1000):
         """Initialize the LLM with the specified model and parameters."""
         # Get API key from environment
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = os.getenv("NOVITA_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY environment variable not set")
+            raise ValueError("NOVITA_API_KEY environment variable not set")
         
         try:
-            # Initialize Groq client
-            self.client = groq.Client(api_key=api_key)
+            # Initialize Novita client
+            self.client = OpenAI(
+                base_url="https://api.novita.ai/v3/openai",
+                api_key=api_key
+            )
             self.model = model
             self.temperature = temperature
             self.max_tokens = max_tokens
             
             # Test the client
             test_response = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model=self.model,
                 messages=[{"role": "user", "content": "Hello"}],
                 temperature=0.1,
                 max_tokens=10
@@ -80,10 +83,10 @@ class LLM:
                 else:
                     return ""
                     
-            except Exception as api_error:
-                console.print(f"[bold red]Error in LLM API call: {str(api_error)}[/bold red]")
-                raise
+            except Exception as e:
+                console.print(f"[bold red]Error getting response from LLM: {str(e)}[/bold red]")
+                return ""
                 
         except Exception as e:
-            console.print(f"[bold red]Error in LLM invocation: {str(e)}[/bold red]")
-            raise 
+            console.print(f"[bold red]Error in invoke_chat: {str(e)}[/bold red]")
+            return "" 

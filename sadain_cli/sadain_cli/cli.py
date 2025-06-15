@@ -5,9 +5,11 @@ from rich.panel import Panel
 import os
 import sys
 from typing import Optional, Tuple
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 import tempfile
 import subprocess
+import warnings
+from dotenv import load_dotenv
 
 from .agent.graph import create_agent_graph, AgentState
 from .utils import get_current_context, print_colored
@@ -19,6 +21,10 @@ from .agent.nodes import (
     format_final_output,
 )
 from .voice_handler import handle_voice_mode, VoiceHandler
+from .command_history import CommandHistory
+
+# Suppress urllib3 warnings
+warnings.filterwarnings('ignore', category=Warning, module='urllib3')
 
 app = typer.Typer(
     name="sadain",
@@ -26,6 +32,9 @@ app = typer.Typer(
     add_completion=False
 )
 console = Console()
+
+# Load environment variables
+load_dotenv()
 
 # Ensure API key is loaded/checked at module import
 # This is a bit eager, could be moved to on_command_run
@@ -72,21 +81,76 @@ def main(
     agent_mode: bool = typer.Option(False, "-a", "--agent", help="Run in agent mode"),
     use_context: bool = typer.Option(True, "-c", "--context", help="Use context from current directory"),
     verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable verbose output"),
-    voice_mode: bool = typer.Option(False, "--voice", help="Enable voice mode")
+    voice_mode: bool = typer.Option(False, "--voice", help="Enable voice mode"),
+    undo: bool = typer.Option(False, "--undo", help="Undo the last executed command"),
+    history: bool = typer.Option(False, "--history", help="Show command history")
 ) -> None:
     """Main entry point for the Sadain CLI."""
     try:
-        # Initialize console
-        console = Console()
+        # Initialize command history
+        command_history = CommandHistory()
         
-        # Handle voice mode
+        # Handle history command
+        if history:
+            history_entries = command_history.get_history()
+            if history_entries:
+                console.print("[bold blue]Command History:[/bold blue]")
+                for i, entry in enumerate(history_entries, 1):
+                    console.print(f"\n[bold cyan]Entry {i}:[/bold cyan]")
+                    console.print(f"[dim]Command:[/dim] {entry['command']}")
+                    console.print(f"[dim]Timestamp:[/dim] {entry['timestamp']}")
+                    if 'result' in entry:
+                        console.print(f"[dim]Result:[/dim] {entry['result']}")
+            else:
+                console.print("[yellow]No command history available[/yellow]")
+            return
+        
+        # Handle undo command
+        if undo:
+            last_command = command_history.undo_last_command()
+            if last_command:
+                console.print("[bold blue]Undoing last command...[/bold blue]")
+                console.print(f"[dim]Command: {last_command['command']}[/dim]")
+                
+                # Handle file creation undo
+                if 'cat >' in last_command['command'] and '<<' in last_command['command']:
+                    try:
+                        # Extract file path from the command
+                        command_lines = last_command['command'].strip().split('\n')
+                        file_path = command_lines[0].split('cat >')[1].split('<<')[0].strip()
+                        
+                        # Remove quotes if present
+                        file_path = file_path.strip('"\'')
+                        
+                        # Get absolute path if relative
+                        if not os.path.isabs(file_path):
+                            file_path = os.path.join(os.getcwd(), file_path)
+                        
+                        console.print(f"[dim]Attempting to remove file: {file_path}[/dim]")
+                        
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            console.print(f"[green]Successfully removed file: {file_path}[/green]")
+                        else:
+                            console.print(f"[yellow]File not found: {file_path}[/yellow]")
+                    except Exception as e:
+                        console.print(f"[red]Error undoing file creation: {str(e)}[/red]")
+                else:
+                    # For other commands, we can't automatically undo
+                    console.print("[yellow]Note: Automatic undo is only supported for file creation commands[/yellow]")
+            else:
+                console.print("[yellow]No commands to undo[/yellow]")
+            return
+        
+        # Initialize voice handler if needed
+        voice_handler = None
         if voice_mode:
             voice_handler = VoiceHandler()
             while True:
                 # Get voice command
                 command = handle_voice_mode()
                 if not command:
-                    continue
+                    return
                 
                 # Process the command
                 content = command
@@ -140,13 +204,31 @@ def main(
             graph = create_agent_graph()
             final_state = graph.invoke(initial_state)
             
+            # Store command in history if commands were executed
+            if final_state.get("command_execution_results"):
+                for result in final_state["command_execution_results"]:
+                    command_history.add_command(result["command"], result)
+            
             # Format and display the final output
             if agent_mode:
-                output = format_final_output(final_state)
-                console.print("\n[bold green]Final Output:[/bold green]")
-                console.print(output)
-                if voice_mode:
-                    voice_handler.speak_response(output)
+                # Extract file creation information
+                for result in final_state.get("command_execution_results", []):
+                    if 'cat >' in result["command"] and '<<' in result["command"]:
+                        try:
+                            command_lines = result["command"].strip().split('\n')
+                            file_path = command_lines[0].split('cat >')[1].split('<<')[0].strip()
+                            file_path = file_path.strip('"\'')
+                            if not os.path.isabs(file_path):
+                                file_path = os.path.join(os.getcwd(), file_path)
+                            console.print(f"[green]File created successfully: {file_path}[/green]")
+                            if voice_mode:
+                                voice_handler.speak_response(f"File created successfully at {file_path}")
+                        except Exception as e:
+                            console.print(f"[yellow]Command executed, but could not extract file path: {str(e)}[/yellow]")
+                    else:
+                        console.print(f"[green]Command executed successfully[/green]")
+                        if voice_mode:
+                            voice_handler.speak_response("Command executed successfully")
             else:
                 response = final_state.get("llm_response_raw", "No response generated")
                 console.print("\n[bold green]Response:[/bold green]")
@@ -162,17 +244,10 @@ def main(
             raise typer.Exit(1)
             
     except Exception as e:
-        # Handle Rich markup errors
-        if "closing tag" in str(e):
-            error_msg = f"Error: {str(e)}"
-            console.print(f"[bold red]{error_msg}[/bold red]")
-            if voice_mode:
-                voice_handler.speak_response(error_msg)
-        else:
-            error_msg = f"Error: {str(e)}"
-            console.print(f"[bold red]{error_msg}[/bold red]")
-            if voice_mode:
-                voice_handler.speak_response(error_msg)
+        error_msg = f"Error: {str(e)}"
+        console.print(f"[bold red]{error_msg}[/bold red]")
+        if voice_mode:
+            voice_handler.speak_response(error_msg)
         raise typer.Exit(1)
 
 def execute_command(command: str, shell: str) -> Tuple[int, str, str]:
