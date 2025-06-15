@@ -11,12 +11,8 @@ from rich.console import Console
 console = Console()
 
 def should_execute_commands(state: AgentState) -> str:
-    if state["verbose"]:
-        console.print("[dim]--- Router: Checking execution condition ---[/dim]")
     if state["is_agent_mode"] and state["extracted_commands"]:
-        if state["verbose"]: console.print("[dim]Decision: Execute commands[/dim]")
         return "execute"
-    if state["verbose"]: console.print("[dim]Decision: Format output directly[/dim]")
     return "format_direct"
 
 

@@ -108,15 +108,11 @@ For now, if changes are suggested, output the commands that would make those cha
 def get_llm_instance(state: AgentState) -> LLM:
     """Get or create an LLM instance."""
     try:
-        console.print(f"[bold blue]=== Getting LLM Instance ===[/bold blue]")
-        
         # Check if we already have an instance
         if "llm" in state:
-            console.print("[dim]Using existing LLM instance[/dim]")
             return state["llm"]
         
         # Create a new instance
-        console.print("[dim]Creating new LLM instance[/dim]")
         llm = LLM(
             model=state.get("model", "llama-3.3-70b-versatile"),
             temperature=state.get("temperature", 0.7),
@@ -125,22 +121,15 @@ def get_llm_instance(state: AgentState) -> LLM:
         
         # Store the instance in the state
         state["llm"] = llm
-        console.print("[dim]LLM instance created and stored in state[/dim]")
-        
         return llm
         
     except Exception as e:
         console.print(f"[bold red]Error getting LLM instance: {str(e)}[/bold red]")
-        console.print(f"[dim]Exception type: {type(e)}[/dim]")
-        import traceback
-        console.print(f"[dim]Traceback:\n{traceback.format_exc()}[/dim]")
         raise
 
 
 def generate_initial_response(state: AgentState) -> AgentState:
     """Generate the initial response from the LLM."""
-    console.print(f"[bold blue]=== Starting LLM Response Generation ===[/bold blue]")
-    
     llm = get_llm_instance(state)
     query = state["original_query"]
     context_str = state["current_context"]
@@ -154,7 +143,6 @@ def generate_initial_response(state: AgentState) -> AgentState:
         filename_match = re.search(r'file (?:called|named) (\w+\.\w+)', query, re.IGNORECASE)
         if filename_match:
             requested_filename = filename_match.group(1)
-            console.print(f"[bold blue]Extracted requested filename: {requested_filename}[/bold blue]")
             state["requested_filename"] = requested_filename
     
     # Handle file path
@@ -212,33 +200,20 @@ DO NOT add any content that wasn't specifically requested by the user.
             file_context_prompt=file_context_prompt_str
         )
 
-    if state["verbose"]:
-        print_colored(f"--- LLM System Prompt ---\n{prompt}", "magenta")
-        print_colored(f"--- User Query ---\n{query}", "magenta")
-
-    console.print(f"[bold blue]Sending query to LLM:[/bold blue]\n{query}")
     response = llm.invoke_chat(prompt, query, chat_history=state.get("chat_history", []))
-    console.print(f"[bold blue]Received LLM response:[/bold blue]\n{response}")
-
-    if state["verbose"]:
-        print_colored(f"--- LLM Raw Response ---\n{response}", "magenta")
 
     # Validate the response for file creation
     if "create" in query.lower() or "make" in query.lower():
         if requested_filename:
             # Check if the response contains the correct filename
             if requested_filename not in response:
-                console.print(f"[yellow]Warning: Response does not contain requested filename '{requested_filename}'. Retrying...[/yellow]")
                 prompt += f"\n\nIMPORTANT: You MUST use the filename '{requested_filename}' in your command. No other filename is acceptable."
                 response = llm.invoke_chat(prompt, query, chat_history=state.get("chat_history", []))
-                console.print(f"[bold blue]Received retry LLM response:[/bold blue]\n{response}")
         elif "new_file.txt" in response or "dependency_links.txt" in response:
             # If the LLM used a placeholder, try again with a more explicit prompt
             prompt += "\n\nIMPORTANT: Use the EXACT filename specified by the user, not 'new_file.txt' or 'dependency_links.txt'."
             response = llm.invoke_chat(prompt, query, chat_history=state.get("chat_history", []))
-            console.print(f"[bold blue]Received retry LLM response:[/bold blue]\n{response}")
 
-    console.print(f"[bold blue]=== LLM Response Generation Complete ===[/bold blue]")
     return {**state, "llm_response_raw": response or ""}
 
 
@@ -372,11 +347,8 @@ def parse_commands(state: AgentState) -> AgentState:
 def execute_parsed_commands(state: AgentState) -> AgentState:
     """Execute the parsed commands and update the state with the results."""
     try:
-        console.print("[bold blue]=== Executing Commands ===[/bold blue]")
-        
         # Get the commands from the state
         commands = state.get("extracted_commands", [])
-        console.print(f"[dim]Found {len(commands)} commands to execute[/dim]")
         
         # Get the requested filename if this is a file creation request
         requested_filename = None
@@ -385,23 +357,18 @@ def execute_parsed_commands(state: AgentState) -> AgentState:
             filename_match = re.search(r'file (?:called|named) (\w+\.\w+)', state.get("original_query", "").lower())
             if filename_match:
                 requested_filename = filename_match.group(1)
-                console.print(f"[dim]Extracted requested filename: {requested_filename}[/dim]")
                 
                 # If no commands were found, create a default command
                 if not commands:
                     default_command = f"""cat > {requested_filename} << 'EOF'
 print("hello sadain")
 EOF"""
-                    console.print(f"[dim]Created default command:\n{default_command}[/dim]")
                     commands = [default_command]
                     state["extracted_commands"] = commands
         
         # Execute each command
         results = []
-        for i, command in enumerate(commands, 1):
-            console.print(f"\n[bold blue]Executing command {i}/{len(commands)}:[/bold blue]")
-            console.print(f"[dim]{command}[/dim]")
-            
+        for command in commands:
             try:
                 # Execute the command
                 result = subprocess.run(
@@ -411,16 +378,6 @@ EOF"""
                     text=True,
                     check=False
                 )
-                
-                # Log the result
-                if result.returncode == 0:
-                    console.print("[green]Command executed successfully[/green]")
-                    if result.stdout:
-                        console.print(f"[dim]Output:\n{result.stdout}[/dim]")
-                else:
-                    console.print(f"[yellow]Command failed with return code {result.returncode}[/yellow]")
-                    if result.stderr:
-                        console.print(f"[dim]Error:\n{result.stderr}[/dim]")
                 
                 # Store the result
                 results.append({
@@ -446,11 +403,9 @@ EOF"""
         # Verify file creation if this was a file creation request
         if requested_filename:
             if os.path.exists(requested_filename):
-                console.print(f"[green]File {requested_filename} was created successfully[/green]")
                 try:
                     with open(requested_filename, 'r') as f:
                         content = f.read()
-                    console.print(f"[dim]File contents:\n{content}[/dim]")
                 except Exception as e:
                     console.print(f"[yellow]Could not read file contents: {str(e)}[/yellow]")
             else:
@@ -460,9 +415,6 @@ EOF"""
         
     except Exception as e:
         console.print(f"[bold red]Error in execute_parsed_commands: {str(e)}[/bold red]")
-        console.print(f"[dim]Exception type: {type(e)}[/dim]")
-        import traceback
-        console.print(f"[dim]Traceback:\n{traceback.format_exc()}[/dim]")
         raise
 
 

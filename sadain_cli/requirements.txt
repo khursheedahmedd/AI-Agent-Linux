@@ -3,4 +3,8 @@ langgraph
 langchain-groq
 python-dotenv
 typer[all] 
-rich 
+rich
+SpeechRecognition
+pyttsx3
+pyaudio
+pynput 

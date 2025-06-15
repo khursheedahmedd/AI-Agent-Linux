@@ -17,4 +17,5 @@ sadain_cli.egg-info/top_level.txt
 sadain_cli/agent/__init__.py
 sadain_cli/agent/graph.py
 sadain_cli/agent/nodes.py
+sadain_cli/agent/prompt_loader.py
 sadain_cli/agent/tools.py

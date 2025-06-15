@@ -18,6 +18,7 @@ from .agent.nodes import (
     execute_parsed_commands,
     format_final_output,
 )
+from .voice_handler import handle_voice_mode, VoiceHandler
 
 app = typer.Typer(
     name="sadain",
@@ -70,12 +71,26 @@ def main(
     content: str = typer.Argument(None, help="Content to process"),
     agent_mode: bool = typer.Option(False, "-a", "--agent", help="Run in agent mode"),
     use_context: bool = typer.Option(True, "-c", "--context", help="Use context from current directory"),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable verbose output")
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable verbose output"),
+    voice_mode: bool = typer.Option(False, "--voice", help="Enable voice mode")
 ) -> None:
     """Main entry point for the Sadain CLI."""
     try:
         # Initialize console
         console = Console()
+        
+        # Handle voice mode
+        if voice_mode:
+            voice_handler = VoiceHandler()
+            while True:
+                # Get voice command
+                command = handle_voice_mode()
+                if not command:
+                    continue
+                
+                # Process the command
+                content = command
+                break
         
         # Get current directory context if requested
         current_context = ""
@@ -130,20 +145,34 @@ def main(
                 output = format_final_output(final_state)
                 console.print("\n[bold green]Final Output:[/bold green]")
                 console.print(output)
+                if voice_mode:
+                    voice_handler.speak_response(output)
             else:
+                response = final_state.get("llm_response_raw", "No response generated")
                 console.print("\n[bold green]Response:[/bold green]")
-                console.print(final_state.get("llm_response_raw", "No response generated"))
+                console.print(response)
+                if voice_mode:
+                    voice_handler.speak_response(response)
                 
         except Exception as e:
-            console.print(f"[bold red]Error during execution: {str(e)}[/bold red]")
+            error_msg = f"Error during execution: {str(e)}"
+            console.print(f"[bold red]{error_msg}[/bold red]")
+            if voice_mode:
+                voice_handler.speak_response(error_msg)
             raise typer.Exit(1)
             
     except Exception as e:
         # Handle Rich markup errors
         if "closing tag" in str(e):
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
+            error_msg = f"Error: {str(e)}"
+            console.print(f"[bold red]{error_msg}[/bold red]")
+            if voice_mode:
+                voice_handler.speak_response(error_msg)
         else:
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
+            error_msg = f"Error: {str(e)}"
+            console.print(f"[bold red]{error_msg}[/bold red]")
+            if voice_mode:
+                voice_handler.speak_response(error_msg)
         raise typer.Exit(1)
 
 def execute_command(command: str, shell: str) -> Tuple[int, str, str]:
